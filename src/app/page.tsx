@@ -1,37 +1,41 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, Check, Clock3, FileText, FolderOpen, History, LockKeyhole, Moon, RotateCcw, ShieldCheck, Sun, Upload, X, Zap } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, Clock3, FileText, FolderOpen, History, LockKeyhole, RotateCcw, ShieldCheck, Upload, X, Zap } from "lucide-react";
 import { addHistory, clearHistory, downloadBlob, readHistory } from "@/features/converter/services/browser-storage";
 import { convertPdfToWord } from "@/features/converter/services/pdf-to-word";
 import { convertWordToPdf } from "@/features/converter/services/word-to-pdf";
 import { detectFormat, validateFile } from "@/features/converter/services/file-validator";
 import { futureTools, tools } from "@/features/tools/registry";
 import Prism from "@/components/Prism";
+import ThemeSelector from "@/components/ThemeSelector";
+import { isThemeId, type ThemeId } from "@/features/theme/themes";
 import type { AppError, ConversionProgress, ConversionStatus, HistoryEntry, ConversionResult, DocumentFormat } from "@/features/converter/types";
 
 const formatLabel: Record<DocumentFormat, string> = { pdf: "PDF document", docx: "Word document" };
 const initialProgress: ConversionProgress = { label: "Ready when you are" };
 
 function Logo() { return <span className="brand-mark" aria-hidden="true"><FileText size={19} /><ArrowRight size={13} /></span>; }
-function ThemeIcon({ theme }: { theme: string }) { return theme === "dark" ? <Moon size={16} /> : <Sun size={16} />; }
 
 export default function Home() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null); const [format, setFormat] = useState<DocumentFormat | null>(null);
   const [status, setStatus] = useState<ConversionStatus>("idle"); const [error, setError] = useState<AppError | null>(null);
   const [progress, setProgress] = useState<ConversionProgress>(initialProgress); const [result, setResult] = useState<ConversionResult | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>(() => typeof window === "undefined" ? [] : readHistory()); const [theme, setTheme] = useState(() => typeof window === "undefined" ? "system" : localStorage.getItem("docflip-theme") ?? "system"); const [dragging, setDragging] = useState(false);
-
+  const [history, setHistory] = useState<HistoryEntry[]>(() => typeof window === "undefined" ? [] : readHistory()); const [theme, setTheme] = useState<ThemeId>(() => {
+    if (typeof window === "undefined") return "default";
+    const saved = localStorage.getItem("docflip-theme");
+    return isThemeId(saved) ? saved : "default";
+  }); const [dragging, setDragging] = useState(false);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
-  const applyTheme = (next: string) => { setTheme(next); localStorage.setItem("docflip-theme", next); document.documentElement.dataset.theme = next; };
+  const applyTheme = (next: ThemeId) => { setTheme(next); localStorage.setItem("docflip-theme", next); document.documentElement.dataset.theme = next; };
   const chooseFile = (candidate: File) => { setError(null); setResult(null); const checked = validateFile(candidate); if ("error" in checked) { setFile(null); setFormat(null); setStatus("failed"); setError(checked.error); return; } setFile(candidate); setFormat(checked.format); setStatus("ready"); setProgress(initialProgress); };
   const reset = () => { setFile(null); setFormat(null); setStatus("idle"); setError(null); setResult(null); setProgress(initialProgress); if (inputRef.current) inputRef.current.value = ""; };
   const convert = async () => { if (!file || !format) return; setStatus("processing"); setError(null); setProgress({ label: format === "pdf" ? "Reading your PDF…" : "Preparing your document…" }); try { const converted = format === "pdf" ? await convertPdfToWord(file, setProgress) : await convertWordToPdf(file, setProgress); setResult(converted); setStatus("completed"); const entry: HistoryEntry = { id: crypto.randomUUID(), originalFilename: file.name, outputFilename: converted.filename, conversionType: format === "pdf" ? "pdf-to-word" : "word-to-pdf", timestamp: Date.now(), status: "completed" }; addHistory(entry); setHistory(readHistory()); } catch (caught) { const code = caught instanceof Error && caught.message === "SCANNED_PDF" ? "SCANNED_PDF" : "CONVERSION_FAILED"; setStatus("failed"); setError({ code, message: code === "SCANNED_PDF" ? "This looks like a scanned PDF. Text recognition (OCR) isn't available in this version yet." : "We couldn't convert this document. Please try another file." }); } };
 
   return <main>
-    <header className="topbar"><a className="brand" href="#convert"><Logo /><span>DocFlip</span></a><nav><a href="#convert">Convert</a><a href="#tools">Tools</a><a href="#history">History</a></nav><div className="theme-control"><ThemeIcon theme={theme} /><select aria-label="Color theme" value={theme} onChange={(event) => applyTheme(event.target.value)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div></header>
-    <section className="hero" id="convert"><div className="hero-prism" aria-hidden="true"><Prism animationType="rotate" timeScale={0.35} height={3.5} baseWidth={5.5} scale={3.6} hueShift={0} colorFrequency={1} noise={0.28} glow={0.85} bloom={0.9} suspendWhenOffscreen lightMode={theme === "light"} /></div><div className="eyebrow"><span className="eyebrow-dot" />PRIVATE BY DESIGN</div><h1>Flip your <em>documents.</em></h1><p className="hero-copy">Convert PDF to Word or Word to PDF directly in your browser.</p><p className="privacy-line"><LockKeyhole size={15} /> Your documents stay on your device.</p>
+    <header className="topbar"><a className="brand" href="#convert"><Logo /><span>DocFlip</span></a><nav><a href="#convert">Convert</a><a href="#tools">Tools</a><a href="#history">History</a></nav><ThemeSelector theme={theme} onChange={applyTheme} /></header>
+    <section className="hero" id="convert"><div className="hero-prism" aria-hidden="true"><Prism animationType="rotate" timeScale={0.35} height={3.5} baseWidth={5.5} scale={3.6} hueShift={0} colorFrequency={1} noise={0.28} glow={0.85} bloom={0.9} suspendWhenOffscreen /></div><div className="eyebrow"><span className="eyebrow-dot" />PRIVATE BY DESIGN</div><h1>Flip your <em>documents.</em></h1><p className="hero-copy">Convert PDF to Word or Word to PDF directly in your browser.</p><p className="privacy-line"><LockKeyhole size={15} /> Your documents stay on your device.</p>
       <div className={`converter-card ${dragging ? "is-dragging" : ""}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); const dropped = event.dataTransfer.files[0]; if (dropped) chooseFile(dropped); }}>
         {status === "idle" || status === "failed" && !file ? <div className="dropzone" role="button" tabIndex={0} onClick={() => inputRef.current?.click()} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") inputRef.current?.click(); }}><div className="upload-icon"><Upload size={23} /></div><h2>Drop your document here</h2><p>or <button className="text-button" onClick={(event) => { event.stopPropagation(); inputRef.current?.click(); }}>choose a file</button></p><span className="format-note">PDF or DOCX · up to 25 MB</span><input ref={inputRef} type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => { const picked = event.target.files?.[0]; if (picked) chooseFile(picked); }} /></div> : status === "completed" && result ? <div className="result-state"><div className="success-icon"><Check size={25} /></div><div><span className="status-kicker">CONVERSION COMPLETE</span><h2>Your document is ready</h2><p>{result.filename}</p></div><div className="result-actions"><button className="primary-button" onClick={() => downloadBlob(result.blob, result.filename)}><ArrowDown size={17} /> Download {format === "pdf" ? "Word" : "PDF"}</button><button className="secondary-button" onClick={reset}><RotateCcw size={16} /> Convert another</button></div></div> : file && format ? <div className="selected-state"><div className="file-row"><div className="file-icon"><FileText size={22} /></div><div className="file-details"><strong>{file.name}</strong><span>{formatLabel[format]} · {formatBytes(file.size)}</span></div><button className="icon-button" aria-label="Remove file" onClick={reset}><X size={18} /></button></div><div className="direction"><span>{format === "pdf" ? "PDF" : "Word"}</span><ArrowRight size={18} /><strong>{format === "pdf" ? "Word" : "PDF"}</strong></div>{status === "processing" ? <div className="processing"><div className="processing-heading"><span>{progress.label}</span>{progress.percent !== undefined && <strong>{progress.percent}%</strong>}</div><div className="progress-track"><span style={{ width: `${progress.percent ?? 35}%` }} /></div></div> : <button className="primary-button convert-button" onClick={convert}><Zap size={17} /> Convert to {format === "pdf" ? "Word" : "PDF"}</button>}<button className="change-file" onClick={() => inputRef.current?.click()}>Change file</button><input ref={inputRef} type="file" accept=".pdf,.docx" onChange={(event) => { const picked = event.target.files?.[0]; if (picked) chooseFile(picked); }} /></div> : null}
         {error && <div className="error-box" role="alert"><X size={17} /><span>{error.message}</span><button onClick={reset}>Try another file</button></div>}
