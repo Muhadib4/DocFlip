@@ -247,3 +247,16 @@ export function isThemeId(value: string | null): value is ThemeId {
 export function getTheme(id: ThemeId): ThemeConfig {
   return themes[id];
 }
+
+export type BackgroundId = "none" | "prism" | "balatro" | "shape-waves";
+
+export const backgroundOptions: { id: BackgroundId; name: string; description: string }[] = [
+  { id: "shape-waves", name: "ShapeWaves", description: "Interactive flowing grid" },
+  { id: "balatro", name: "Balatro", description: "Pixelated color field" },
+  { id: "prism", name: "Prism", description: "Soft 3D light prism" },
+  { id: "none", name: "None", description: "Clean, quiet background" },
+];
+
+export function isBackgroundId(value: string | null): value is BackgroundId {
+  return value !== null && backgroundOptions.some((option) => option.id === value);
+}
